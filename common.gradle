@@ -1,0 +1,131 @@
+// Common Gradle tasks
+
+ext {
+    javaVersion = System.getProperty('java.version')
+    javaVerifyBug = (javaVersion.startsWith('1.7.0') && javaVersion < '1.7.0_72') || (javaVersion.startsWith('1.8.0') && javaVersion < '1.8.0_25')
+    noisy = false
+}
+
+allprojects {
+	logger.debug "common allprojects: ${project}"
+	
+	if (plugins.hasPlugin( 'groovy')) {
+		apply plugin: 'jacoco'
+
+		// Set Java compiler options
+	    tasks.withType(JavaCompile) { JavaCompile t ->
+	        t.group = 'build'
+	        t.options.encoding = 'UTF-8'
+	        if (noisy) {
+	            t.options.compilerArgs << '-Xmaxerrs' << '1000' << '-Xmaxwarns' << '5000'
+	            t.options.compilerArgs << '-Xlint:all' << '-Xlint:-fallthrough' // << '-Xlint:-deprecation' << '-Xlint:-cast'
+	        }
+	    }
+
+		// Set Groovy compiler options
+	    tasks.withType(GroovyCompile) { GroovyCompile t ->
+	        t.group = 'build'
+	        t.options.encoding = 'UTF-8'
+	        if (noisy) {
+	            t.options.compilerArgs << '-Xmaxerrs' << '1000' << '-Xmaxwarns' << '5000'
+	            t.options.compilerArgs << '-Xlint:all' << '-Xlint:-fallthrough' // << '-Xlint:-deprecation' << '-Xlint:-cast'
+	        }
+	        if (javaVerifyBug) {
+	            groovyOptions.forkOptions.jvmArgs << '-noverify'
+	        }
+	    }
+
+		// Set test runner options
+	    tasks.withType(Test) { Test t ->
+	        if (javaVerifyBug) {
+	            t.jvmArgs << '-noverify'
+	        }
+	    }
+
+		jacoco {
+		    toolVersion = '0.7.6.201602180812' // Latest release from http://eclemma.org/jacoco/
+		}
+
+		jacocoTestReport {
+		    reports {
+		        xml.enabled false
+		        csv.enabled false
+		        // html.destination '${buildDir}/reports/coverage'
+		    }
+		}
+
+	    task cleanCompile(group: 'build') {
+	        dependsOn clean, testClasses
+	    }
+
+	    task cleanTest(group: 'verification') {
+	        dependsOn clean, test
+	    }
+
+		task coverage(group: 'verification') {
+		    dependsOn clean, test, jacocoTestReport
+		}
+	
+	    task debugSourceSets << {
+	        project.sourceSets.each {
+	            logger.lifecycle "******************** ${it.name} ********************"
+	            logger.lifecycle "output.classesDir = ${it.output.classesDir}"
+	            logger.lifecycle "output.resourcesDir = ${it.output.resourcesDir}"
+	            logger.lifecycle ''
+	            logger.lifecycle "compileClasspath = \n${printableClasspath(it.compileClasspath)}\n"
+	            logger.lifecycle "runtimeClasspath = \n${printableClasspath(it.runtimeClasspath)}\n"
+	        }
+	    }
+	
+	    task version << {
+	        logger.lifecycle "Gradle version:  ${project.getGradle().getGradleVersion()}"
+	        logger.lifecycle "Gradle Groovy:   ${GroovySystem.getVersion()}"
+	        logger.lifecycle "Java version:    ${javaVersion}"
+	        logger.lifecycle "Java Verify Bug: ${javaVerifyBug}"
+	        logger.lifecycle ""
+	        logger.lifecycle "Project:         ${project.name}"
+	        logger.lifecycle "Project path:    ${project.projectDir}"
+	    }
+	
+		// Task to create source directory structure
+		task createSourceSetDirectories << {
+		    // Cucumber directories
+		    if ( plugins.hasPlugin ( 'com.github.samueltbrown.cucumber' ) ) {
+		        glueDirs.each { dir ->
+		            def path = new File( dir )
+		            if (path.mkdirs()) {
+		                logger.lifecycle "Created ${path.canonicalPath}"
+		            }
+		        }
+    
+		        featureDirs.each { dir ->
+		            def path = new File( dir )
+		            if (path.mkdirs()) {
+		                logger.lifecycle "Created ${path.canonicalPath}"
+		            }
+		        }
+    
+		        sourceSets.maybeCreate( 'cucumber' )
+		    }
+
+		    // Source directories    
+		    sourceSets.all { set ->
+		        set.allSource.srcDirs.each { path ->
+		            if (path.mkdirs()) {
+		                logger.lifecycle "Created ${path.canonicalPath}"
+		            }
+		        }
+		    }
+		}
+	}
+}
+
+// Disable Groovy optimizations when testing code coverage
+gradle.taskGraph.whenReady { graph ->
+    if (graph.hasTask(':jacocoTestReport')) {
+        logger.lifecycle 'Disabling Groovy Optimizations for code coverage'
+		allProjects {
+        	compileGroovy.groovyOptions.optimizationOptions.all = false
+		}
+    }
+}

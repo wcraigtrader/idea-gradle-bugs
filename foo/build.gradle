@@ -1,0 +1,57 @@
+apply plugin: 'groovy'
+
+ext {
+	genDocs = 'src/generated/docs/'
+	genJava = 'src/generated/java/'
+	genResources = 'src/generated/resources/'
+}
+
+sourceSets {
+    schema // Builds first, contains the meta classes and code generator
+
+    main { // Builds after schema, contains classes that depend upon or support the generated schema classes
+        java {
+            srcDirs += file(genJava)
+        }
+        resources {
+            srcDirs += file(genResources)
+        }
+        compileClasspath += schema.compileClasspath // + schema.output
+        runtimeClasspath += schema.runtimeClasspath // + schema.output
+    }
+
+    test { // Builds after tools, for testing everything
+        compileClasspath += schema.compileClasspath // + schema.output
+        runtimeClasspath += schema.runtimeClasspath // + schema.output
+    }
+}
+
+dependencies {
+    compile 'org.codehaus.groovy:groovy-all:2.4+'
+    compile 'org.slf4j:slf4j-api:1.7.21'
+
+    testCompile 'org.spockframework:spock-core:1.0-groovy-2.4'
+}
+
+/** Generate the schema artifacts */
+task generateSchema(group: 'build') << {
+	file(genDocs).mkdirs()
+    file(genJava).mkdirs()
+	file(genResources).mkdirs()
+	
+    file(genJava + 'B.java').withPrintWriter { PrintWriter p ->
+	    p.write """
+class B extends A {}
+"""
+	}
+}
+generateSchema.dependsOn schemaClasses
+compileJava.dependsOn generateSchema
+
+/** Clean up the schema artifacts */
+task cleanGeneratedSchema(type: Delete) {
+	delete genDocs
+	delete genJava
+	delete genResources
+}
+clean.dependsOn cleanGeneratedSchema

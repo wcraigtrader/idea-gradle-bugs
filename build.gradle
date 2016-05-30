@@ -1,0 +1,9 @@
+apply plugin: 'idea'
+
+allprojects {
+    logger.debug "build allprojects: ${project}"
+	repositories { jcenter() }
+    apply plugin: 'idea'
+}
+
+apply from: 'common.gradle'
