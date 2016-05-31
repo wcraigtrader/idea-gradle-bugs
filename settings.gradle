@@ -1,4 +1,4 @@
-rootProject.name = 'intellij-gradle-bug'
+rootProject.name = 'idea-gradle-bugs'
 
 include 'foo'
 include 'bar'
